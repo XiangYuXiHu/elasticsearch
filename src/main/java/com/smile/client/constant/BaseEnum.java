@@ -7,6 +7,7 @@ public enum BaseEnum {
 
     SUCCESS(10000, "成功"),
     INDEX_EXIST(10001, "索引已存在"),
+    INDEX_UPDATE_ID_NOT_EXIST(10002, "更新索引需id"),
     FAILURE(10024, "失败"),
     SERVER_ERROR(10500, "系统异常");
 

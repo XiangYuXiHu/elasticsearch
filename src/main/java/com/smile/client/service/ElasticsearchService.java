@@ -54,6 +54,25 @@ public interface ElasticsearchService {
      */
     void insertOrUpdate(String idxName, IdxEntity idxEntity) throws IOException;
 
+
+    /**
+     * 插入或者更新索引
+     *
+     * @param idxName
+     * @param idxEntity
+     * @throws IOException
+     */
+    void indexUpdate(String idxName, IdxEntity idxEntity) throws IOException;
+
+    /**
+     * upsert
+     *
+     * @param idxName
+     * @param idxEntity
+     * @throws IOException
+     */
+    void upsert(String idxName, IdxEntity idxEntity) throws IOException;
+
     /**
      * 批量插入
      *
@@ -81,6 +100,16 @@ public interface ElasticsearchService {
      * @throws IOException
      */
     boolean deleteIndex(String idxName) throws IOException;
+
+    /**
+     * 删除索引
+     *
+     * @param idxName
+     * @param id
+     * @return
+     * @throws IOException
+     */
+    void deleteIndex(String idxName, String id) throws IOException;
 
     /**
      * 检索

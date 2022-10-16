@@ -1,6 +1,7 @@
 package com.smile.client.controller;
 
 import com.alibaba.fastjson.JSON;
+import com.smile.client.domain.IdxEntity;
 import com.smile.client.service.ElasticsearchService;
 import com.smile.client.vo.BaseVo;
 import com.smile.client.vo.IndexRequest;
@@ -112,4 +113,5 @@ public class IndexController {
         }
         return BaseVo.success();
     }
+
 }

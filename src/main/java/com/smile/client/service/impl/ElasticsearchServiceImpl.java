@@ -6,13 +6,17 @@ import com.smile.client.exception.BizException;
 import com.smile.client.service.ElasticsearchService;
 import lombok.extern.slf4j.Slf4j;
 import org.elasticsearch.action.ActionListener;
+import org.elasticsearch.action.DocWriteResponse;
 import org.elasticsearch.action.admin.indices.delete.DeleteIndexRequest;
 import org.elasticsearch.action.bulk.BulkRequest;
 import org.elasticsearch.action.delete.DeleteRequest;
+import org.elasticsearch.action.delete.DeleteResponse;
 import org.elasticsearch.action.index.IndexRequest;
+import org.elasticsearch.action.index.IndexResponse;
 import org.elasticsearch.action.search.SearchRequest;
 import org.elasticsearch.action.search.SearchResponse;
 import org.elasticsearch.action.support.master.AcknowledgedResponse;
+import org.elasticsearch.action.update.UpdateRequest;
 import org.elasticsearch.client.RequestOptions;
 import org.elasticsearch.client.RestHighLevelClient;
 import org.elasticsearch.client.indices.CreateIndexRequest;
@@ -26,6 +30,7 @@ import org.elasticsearch.search.builder.SearchSourceBuilder;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.elasticsearch.index.query.QueryBuilder;
+import org.springframework.util.StringUtils;
 
 import java.io.IOException;
 import java.util.Collection;
@@ -34,6 +39,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static com.smile.client.constant.BaseEnum.INDEX_EXIST;
+import static com.smile.client.constant.BaseEnum.INDEX_UPDATE_ID_NOT_EXIST;
 
 /**
  * @Description
@@ -108,12 +114,32 @@ public class ElasticsearchServiceImpl implements ElasticsearchService {
 
     @Override
     public void insertOrUpdate(String idxName, IdxEntity idxEntity) throws IOException {
-        IndexRequest request = new IndexRequest();
+        IndexRequest request = new IndexRequest(idxName);
         log.info("update or insert index id:{},entity:{}", idxEntity.getId(), JSON.toJSONString(idxEntity));
         request.id(idxEntity.getId());
         request.source(idxEntity.getData(), XContentType.JSON);
         restHighLevelClient.index(request, RequestOptions.DEFAULT);
     }
+
+    @Override
+    public void indexUpdate(String idxName, IdxEntity idxEntity) throws IOException {
+        String id = idxEntity.getId();
+        if (StringUtils.isEmpty(id)) {
+            throw new BizException(INDEX_UPDATE_ID_NOT_EXIST);
+        }
+        UpdateRequest updateRequest = new UpdateRequest(idxName, id);
+        updateRequest.doc(idxEntity.getData());
+        restHighLevelClient.update(updateRequest, RequestOptions.DEFAULT);
+    }
+
+    @Override
+    public void upsert(String idxName, IdxEntity idxEntity) throws IOException {
+        IndexRequest indexRequest = new IndexRequest(idxName).source(idxEntity.getData());
+        UpdateRequest upsert = new UpdateRequest(idxName, idxEntity.getId()).upsert(indexRequest);
+        upsert.doc(indexRequest);
+        restHighLevelClient.update(upsert, RequestOptions.DEFAULT);
+    }
+
 
     @Override
     public void insertBatch(String idxName, List<IdxEntity> list) throws IOException {
@@ -134,6 +160,12 @@ public class ElasticsearchServiceImpl implements ElasticsearchService {
     public boolean deleteIndex(String idxName) throws IOException {
         AcknowledgedResponse response = restHighLevelClient.indices().delete(new DeleteIndexRequest(idxName), RequestOptions.DEFAULT);
         return response.isAcknowledged();
+    }
+
+    @Override
+    public void deleteIndex(String idxName, String id) throws IOException {
+        DeleteRequest indexRequest = new DeleteRequest(idxName, id);
+        restHighLevelClient.delete(indexRequest, RequestOptions.DEFAULT);
     }
 
 
