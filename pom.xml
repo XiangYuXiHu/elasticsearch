@@ -9,9 +9,9 @@
         <relativePath/> <!-- lookup parent from repository -->
     </parent>
     <groupId>com.smile</groupId>
-    <artifactId>es-client</artifactId>
+    <artifactId>elasticsearch-tools</artifactId>
     <version>0.0.1-SNAPSHOT</version>
-    <name>es-client</name>
+    <name>elasticsearch-tools</name>
     <description>Demo project for Spring Boot</description>
     <properties>
         <java.version>1.8</java.version>
@@ -47,7 +47,7 @@
             <artifactId>lombok</artifactId>
             <optional>true</optional>
         </dependency>
-        
+
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
