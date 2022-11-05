@@ -1,6 +1,7 @@
 package com.smile.client.config;
 
-import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
 
 /**
  * @Description
@@ -8,22 +9,59 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * @Author smile
  * @date 2022.10.15 14:21
  */
-@ConfigurationProperties(prefix = "es")
+@Component
 public class ElasticsearchProperties {
 
+    @Value("${elasticsearch.host:127.0.0.1:9200}")
     private String host;
 
-    private Integer port;
+    @Value("${elasticsearch.username:}")
+    private String username;
 
-    private String scheme;
+    @Value("${elasticsearch.password:}")
+    private String password;
 
-    private int connectTimeoutMillis = 1000;
+    /**
+     * 连接池里的最大连接数
+     */
+    @Value("${elasticsearch.max_connect_total:30}")
+    private int maxConnectTotal;
 
+    /**
+     * 某一个/每服务每次能并行接收的请求数量
+     */
+    @Value("${elasticsearch.max_connect_per_route:10}")
+    private Integer maxConnectPerRoute;
+
+    /**
+     * http clilent中从connetcion pool中获得一个connection的超时时间
+     */
+    @Value("${elasticsearch.connection_request_timeout_millis:2000}")
+    private Integer connectionRequestTimeoutMillis;
+
+    /**
+     * 响应超时时间，超过此时间不再读取响应
+     */
+    @Value("${elasticsearch.socket_timeout_millis:30000}")
     private int socketTimeoutMillis = 30000;
 
-    private int maxConnPerRoute = 10;
+    /**
+     * 链接建立的超时时间
+     */
+    @Value("${elasticsearch.connect_timeout_millis:2000}")
+    private Integer connectTimeoutMillis;
 
-    private int maxConnTotal = 30;
+    /**
+     * keep_alive_strategy
+     */
+    @Value("${elasticsearch.keep_alive_strategy:-1}")
+    private Long keepAliveStrategy;
+
+    /**
+     * 索引后后缀配置
+     */
+    @Value("${elasticsearch.index.suffix:}")
+    private String suffix;
 
     public String getHost() {
         return host;
@@ -33,28 +71,44 @@ public class ElasticsearchProperties {
         this.host = host;
     }
 
-    public Integer getPort() {
-        return port;
+    public String getUsername() {
+        return username;
     }
 
-    public void setPort(Integer port) {
-        this.port = port;
+    public void setUsername(String username) {
+        this.username = username;
     }
 
-    public String getScheme() {
-        return scheme;
+    public String getPassword() {
+        return password;
     }
 
-    public void setScheme(String scheme) {
-        this.scheme = scheme;
+    public void setPassword(String password) {
+        this.password = password;
     }
 
-    public int getConnectTimeoutMillis() {
-        return connectTimeoutMillis;
+    public int getMaxConnectTotal() {
+        return maxConnectTotal;
     }
 
-    public void setConnectTimeoutMillis(int connectTimeoutMillis) {
-        this.connectTimeoutMillis = connectTimeoutMillis;
+    public void setMaxConnectTotal(int maxConnectTotal) {
+        this.maxConnectTotal = maxConnectTotal;
+    }
+
+    public Integer getMaxConnectPerRoute() {
+        return maxConnectPerRoute;
+    }
+
+    public void setMaxConnectPerRoute(Integer maxConnectPerRoute) {
+        this.maxConnectPerRoute = maxConnectPerRoute;
+    }
+
+    public Integer getConnectionRequestTimeoutMillis() {
+        return connectionRequestTimeoutMillis;
+    }
+
+    public void setConnectionRequestTimeoutMillis(Integer connectionRequestTimeoutMillis) {
+        this.connectionRequestTimeoutMillis = connectionRequestTimeoutMillis;
     }
 
     public int getSocketTimeoutMillis() {
@@ -65,32 +119,43 @@ public class ElasticsearchProperties {
         this.socketTimeoutMillis = socketTimeoutMillis;
     }
 
-    public int getMaxConnPerRoute() {
-        return maxConnPerRoute;
+    public Integer getConnectTimeoutMillis() {
+        return connectTimeoutMillis;
     }
 
-    public void setMaxConnPerRoute(int maxConnPerRoute) {
-        this.maxConnPerRoute = maxConnPerRoute;
+    public void setConnectTimeoutMillis(Integer connectTimeoutMillis) {
+        this.connectTimeoutMillis = connectTimeoutMillis;
     }
 
-    public int getMaxConnTotal() {
-        return maxConnTotal;
+    public Long getKeepAliveStrategy() {
+        return keepAliveStrategy;
     }
 
-    public void setMaxConnTotal(int maxConnTotal) {
-        this.maxConnTotal = maxConnTotal;
+    public void setKeepAliveStrategy(Long keepAliveStrategy) {
+        this.keepAliveStrategy = keepAliveStrategy;
+    }
+
+    public String getSuffix() {
+        return suffix;
+    }
+
+    public void setSuffix(String suffix) {
+        this.suffix = suffix;
     }
 
     @Override
     public String toString() {
         return "ElasticsearchProperties{" +
                 "host='" + host + '\'' +
-                ", port=" + port +
-                ", scheme='" + scheme + '\'' +
-                ", connectTimeoutMillis=" + connectTimeoutMillis +
+                ", username='" + username + '\'' +
+                ", password='" + password + '\'' +
+                ", maxConnectTotal=" + maxConnectTotal +
+                ", maxConnectPerRoute=" + maxConnectPerRoute +
+                ", connectionRequestTimeoutMillis=" + connectionRequestTimeoutMillis +
                 ", socketTimeoutMillis=" + socketTimeoutMillis +
-                ", maxConnPerRoute=" + maxConnPerRoute +
-                ", maxConnTotal=" + maxConnTotal +
+                ", connectTimeoutMillis=" + connectTimeoutMillis +
+                ", keepAliveStrategy=" + keepAliveStrategy +
+                ", suffix='" + suffix + '\'' +
                 '}';
     }
 }
