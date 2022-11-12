@@ -88,6 +88,7 @@ public interface ElasticsearchService {
      *
      * @param idxName
      * @param list
+     * @return
      * @throws IOException
      */
     BulkResponse insertBatch(String idxName, List<IdxEntity> list) throws IOException;
@@ -163,6 +164,7 @@ public interface ElasticsearchService {
      * @param indexes
      * @param <T>
      * @return
+     * @throws IOException
      */
     <T> PageList<T> search(QueryBuilder queryBuilder, PageSortHighLight pageSortHighLight, Class<T> clazz, String... indexes) throws IOException;
 
@@ -186,6 +188,18 @@ public interface ElasticsearchService {
      * @param indexes
      * @param <T>
      * @return
+     * @throws IOException
      */
     <T> List<T> searchMore(QueryBuilder queryBuilder, int limitSize, Class<T> clazz, String... indexes) throws IOException;
+
+    /**
+     * 查询数量(跨索引)
+     *
+     * @param queryBuilder
+     * @param clazz
+     * @param indexes
+     * @param <T>
+     * @return
+     */
+    <T> long count(QueryBuilder queryBuilder, Class<T> clazz, String... indexes) throws IOException;
 }

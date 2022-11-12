@@ -23,6 +23,8 @@ import org.elasticsearch.action.update.UpdateRequest;
 import org.elasticsearch.action.update.UpdateResponse;
 import org.elasticsearch.client.RequestOptions;
 import org.elasticsearch.client.RestHighLevelClient;
+import org.elasticsearch.client.core.CountRequest;
+import org.elasticsearch.client.core.CountResponse;
 import org.elasticsearch.client.indices.CreateIndexRequest;
 import org.elasticsearch.client.indices.CreateIndexResponse;
 import org.elasticsearch.client.indices.GetIndexRequest;
@@ -360,6 +362,18 @@ public class ElasticsearchServiceImpl implements ElasticsearchService {
     }
 
     @Override
+    public <T> long count(QueryBuilder queryBuilder, Class<T> clazz, String... indexes) throws IOException {
+        CountRequest countRequest = new CountRequest(indexes);
+        SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
+        sourceBuilder.query(queryBuilder);
+        countRequest.source(sourceBuilder);
+        CountResponse countResponse = restHighLevelClient.count(countRequest, RequestOptions.DEFAULT);
+        return countResponse.getCount();
+    }
+
+
+
+    @Override
     public <T> List<T> search(QueryBuilder queryBuilder, Class<T> cls, Integer pageStart, Integer pageSize, String... idxNames) throws IOException {
         SearchRequest searchRequest = new SearchRequest(idxNames);
         SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
@@ -374,6 +388,7 @@ public class ElasticsearchServiceImpl implements ElasticsearchService {
             return JSON.parseObject(str, cls);
         }).collect(Collectors.toList());
     }
+
 
     private Object mapToObject(Map map, Class<?> clazz) throws Exception {
         if (null == map) {
