@@ -102,12 +102,9 @@ public class IndexController {
             queryBuilder = QueryBuilders.matchQuery(key, params.get(key));
         }
         if (null != queryBuilder) {
-            SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
-            sourceBuilder.query(queryBuilder);
-            sourceBuilder.from(queryVo.getPageIndex());
-            sourceBuilder.size(queryVo.getPageSize());
-            sourceBuilder.timeout(new TimeValue(queryVo.getTimeout(), TimeUnit.SECONDS));
-            List<?> data = elasticsearchService.search(queryVo.getIdxName(), sourceBuilder, aClass);
+            int pageIndex = queryVo.getPageIndex();
+            int pageSize = queryVo.getPageSize();
+            List<?> data = elasticsearchService.search(queryBuilder, aClass, new String[]{queryVo.getIdxName()});
             return BaseVo.success(data);
         }
         return BaseVo.success();

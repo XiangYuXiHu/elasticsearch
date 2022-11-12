@@ -1,19 +1,26 @@
 package com.smile.service.impl;
 
 import com.alibaba.fastjson.JSON;
-import com.smile.domain.IdxEntity;
+import com.alibaba.fastjson.JSONObject;
+import com.smile.domain.*;
 import com.smile.exception.BizException;
 import com.smile.service.ElasticsearchService;
+import com.smile.util.BeanUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.elasticsearch.action.ActionListener;
+import org.elasticsearch.action.DocWriteResponse;
 import org.elasticsearch.action.admin.indices.delete.DeleteIndexRequest;
 import org.elasticsearch.action.bulk.BulkRequest;
+import org.elasticsearch.action.bulk.BulkResponse;
 import org.elasticsearch.action.delete.DeleteRequest;
+import org.elasticsearch.action.delete.DeleteResponse;
 import org.elasticsearch.action.index.IndexRequest;
+import org.elasticsearch.action.index.IndexResponse;
 import org.elasticsearch.action.search.SearchRequest;
 import org.elasticsearch.action.search.SearchResponse;
 import org.elasticsearch.action.support.master.AcknowledgedResponse;
 import org.elasticsearch.action.update.UpdateRequest;
+import org.elasticsearch.action.update.UpdateResponse;
 import org.elasticsearch.client.RequestOptions;
 import org.elasticsearch.client.RestHighLevelClient;
 import org.elasticsearch.client.indices.CreateIndexRequest;
@@ -21,22 +28,32 @@ import org.elasticsearch.client.indices.CreateIndexResponse;
 import org.elasticsearch.client.indices.GetIndexRequest;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.xcontent.XContentType;
+import org.elasticsearch.index.query.QueryBuilder;
+import org.elasticsearch.index.reindex.BulkByScrollResponse;
 import org.elasticsearch.index.reindex.DeleteByQueryRequest;
 import org.elasticsearch.search.SearchHit;
+import org.elasticsearch.search.SearchHits;
 import org.elasticsearch.search.builder.SearchSourceBuilder;
+import org.elasticsearch.search.fetch.subphase.highlight.HighlightBuilder;
+import org.elasticsearch.search.fetch.subphase.highlight.HighlightField;
+import org.elasticsearch.search.sort.FieldSortBuilder;
+import org.elasticsearch.search.sort.SortOrder;
+import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import org.elasticsearch.index.query.QueryBuilder;
 import org.springframework.util.StringUtils;
 
 import java.io.IOException;
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static com.smile.constant.BaseEnum.INDEX_EXIST;
-import static com.smile.constant.BaseEnum.INDEX_UPDATE_ID_NOT_EXIST;
+import static com.smile.constant.BaseEnum.*;
 
 /**
  * @Description
@@ -110,23 +127,39 @@ public class ElasticsearchServiceImpl implements ElasticsearchService {
     }
 
     @Override
-    public void insertOrUpdate(String idxName, IdxEntity idxEntity) throws IOException {
+    public boolean insertOrUpdate(String idxName, IdxEntity idxEntity) throws IOException {
         IndexRequest request = new IndexRequest(idxName);
         log.info("update or insert index id:{},entity:{}", idxEntity.getId(), JSON.toJSONString(idxEntity));
         request.id(idxEntity.getId());
         request.source(idxEntity.getData(), XContentType.JSON);
-        restHighLevelClient.index(request, RequestOptions.DEFAULT);
+        IndexResponse response = restHighLevelClient.index(request, RequestOptions.DEFAULT);
+        if (DocWriteResponse.Result.CREATED.equals(response.getResult())) {
+            log.info("INDEX:{} CREATE SUCCESS", idxName);
+        } else if (DocWriteResponse.Result.UPDATED.equals(response.getResult())) {
+            log.info("INDEX:{} UPDATE SUCCESS", idxName);
+        } else {
+            return false;
+        }
+        return true;
     }
 
     @Override
-    public void indexUpdate(String idxName, IdxEntity idxEntity) throws IOException {
+    public boolean indexUpdate(String idxName, IdxEntity idxEntity) throws IOException {
         String id = idxEntity.getId();
         if (StringUtils.isEmpty(id)) {
             throw new BizException(INDEX_UPDATE_ID_NOT_EXIST);
         }
         UpdateRequest updateRequest = new UpdateRequest(idxName, id);
         updateRequest.doc(idxEntity.getData());
-        restHighLevelClient.update(updateRequest, RequestOptions.DEFAULT);
+        UpdateResponse updateResponse = restHighLevelClient.update(updateRequest, RequestOptions.DEFAULT);
+        if (updateResponse.getResult() == DocWriteResponse.Result.CREATED) {
+            log.info("INDEX:{} CREATE SUCCESS", idxName);
+        } else if (updateResponse.getResult().equals(DocWriteResponse.Result.UPDATED)) {
+            log.info("INDEX:{} UPDATE SUCCESS", idxName);
+        } else {
+            return false;
+        }
+        return true;
     }
 
     @Override
@@ -139,11 +172,11 @@ public class ElasticsearchServiceImpl implements ElasticsearchService {
 
 
     @Override
-    public void insertBatch(String idxName, List<IdxEntity> list) throws IOException {
+    public BulkResponse insertBatch(String idxName, List<IdxEntity> list) throws IOException {
         BulkRequest bulkRequest = new BulkRequest();
         list.forEach(item -> bulkRequest.add(new IndexRequest(idxName).id(item.getId())
                 .source(item.getData(), XContentType.JSON)));
-        restHighLevelClient.bulk(bulkRequest, RequestOptions.DEFAULT);
+        return restHighLevelClient.bulk(bulkRequest, RequestOptions.DEFAULT);
     }
 
     @Override
@@ -160,31 +193,211 @@ public class ElasticsearchServiceImpl implements ElasticsearchService {
     }
 
     @Override
-    public void deleteIndex(String idxName, String id) throws IOException {
+    public boolean deleteIndex(String idxName, String id) throws IOException {
         DeleteRequest indexRequest = new DeleteRequest(idxName, id);
-        restHighLevelClient.delete(indexRequest, RequestOptions.DEFAULT);
+        DeleteResponse deleteResponse = restHighLevelClient.delete(indexRequest, RequestOptions.DEFAULT);
+        if (deleteResponse.getResult().equals(DocWriteResponse.Result.DELETED)) {
+            log.info("INDEX:{} DELETE SUCCESS", idxName);
+        } else {
+            return false;
+        }
+        return true;
     }
 
+    @Override
+    public BulkByScrollResponse deleteByCondition(String indexName, QueryBuilder queryBuilder) throws IOException {
+        DeleteByQueryRequest request = new DeleteByQueryRequest(indexName);
+        request.setQuery(queryBuilder);
+        request.setBatchSize(1000);
+        request.setConflicts("proceed");
+        BulkByScrollResponse response = restHighLevelClient.deleteByQuery(request, RequestOptions.DEFAULT);
+        return response;
+    }
 
     @Override
-    public <T> List<T> search(String idxName, SearchSourceBuilder builder, Class<T> cls) throws IOException {
-        SearchRequest searchRequest = new SearchRequest(idxName);
-        searchRequest.source(builder);
+    public SearchResponse search(SearchRequest request) throws IOException {
+        return restHighLevelClient.search(request, RequestOptions.DEFAULT);
+    }
+
+    @Override
+    public <T> PageList<T> search(QueryBuilder queryBuilder, PageSortHighLight pageSortHighLight, Class<T> clazz, String... indexes) throws IOException {
+        if (null == pageSortHighLight) {
+            throw new BizException(PAGE_SORT_HIGH_LIGHT_ERROR);
+        }
+        Attach attach = new Attach();
+        attach.setPageSortHighLight(pageSortHighLight);
+        return search(queryBuilder, attach, clazz, indexes);
+    }
+
+    @Override
+    public <T> PageList<T> search(QueryBuilder queryBuilder, Attach attach, Class<T> clazz, String... indexes) throws IOException {
+        if (null == attach) {
+            throw new BizException(ATTACH_ERROR);
+        }
+        PageList<T> pageList = new PageList<>();
+        List<T> list = new ArrayList<>();
+        PageSortHighLight pageSortHighLight = attach.getPageSortHighLight();
+        SearchRequest searchRequest = new SearchRequest(indexes);
+        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
+        searchSourceBuilder.query(queryBuilder);
+        boolean highLightFlag = false;
+        boolean idSortFlag = false;
+        if (null != pageSortHighLight) {
+            pageList.setCurrentPage(pageSortHighLight.getPageStart());
+            pageList.setPageSize(pageSortHighLight.getPageSize());
+            if (pageSortHighLight.getPageSize() != 0) {
+                /**
+                 * search after不可指定from
+                 */
+                if (!attach.isSearchAfter()) {
+                    searchSourceBuilder.from((pageSortHighLight.getPageStart() - 1) * pageSortHighLight.getPageSize());
+                }
+                searchSourceBuilder.size(pageSortHighLight.getPageSize());
+            }
+            /**
+             * 排序
+             */
+            if (pageSortHighLight.getSort() != null) {
+                Sort sort = pageSortHighLight.getSort();
+                List<Sort.Order> orders = sort.getOrders();
+                for (int i = 0; i < orders.size(); i++) {
+                    if (orders.get(i).getProperty().equals("_id")) {
+                        idSortFlag = true;
+                    }
+                    searchSourceBuilder.sort(new FieldSortBuilder(orders.get(i).getProperty())
+                            .order(orders.get(i).getDirection()));
+                }
+            }
+            /**
+             * 高亮
+             */
+            HighLight highLight = pageSortHighLight.getHighLight();
+            if (highLight != null && highLight.getHighlightBuilder() != null) {
+                highLightFlag = true;
+                searchSourceBuilder.highlighter(highLight.getHighlightBuilder());
+            } else if (highLight != null && highLight.getHighLightList() != null && highLight.getHighLightList().size() != 0) {
+                HighlightBuilder highlightBuilder = new HighlightBuilder();
+                if (!StringUtils.isEmpty(highLight.getPreTag()) && !StringUtils.isEmpty(highLight.getPostTag())) {
+                    highLight.setPreTag(highLight.getPreTag());
+                    highLight.setPostTag(highLight.getPostTag());
+                }
+                for (int i = 0; i < highLight.getHighLightList().size(); i++) {
+                    highLightFlag = true;
+                    highlightBuilder.field(highLight.getHighLightList().get(i), 0);
+                }
+                searchSourceBuilder.highlighter(highlightBuilder);
+            }
+        }
+        /**
+         * 设定searchAfter
+         */
+        if (attach.isSearchAfter()) {
+            if (null == pageSortHighLight || pageSortHighLight.getPageSize() == 0) {
+                searchSourceBuilder.size(10);
+            } else {
+                searchSourceBuilder.size(pageSortHighLight.getPageSize());
+            }
+            if (attach.getSortValues() != null && attach.getSortValues().length != 0) {
+                searchSourceBuilder.searchAfter(attach.getSortValues());
+            }
+            if (!idSortFlag) {
+                Sort.Order order = new Sort.Order(SortOrder.ASC, "_id");
+                pageSortHighLight.getSort().and(new Sort(order));
+                searchSourceBuilder.sort(new FieldSortBuilder("_id").order(SortOrder.ASC));
+            }
+        }
+        /**
+         * TrackTotalHits设置为true，解除查询结果超出10000的限制
+         */
+        if (attach.isTrackTotalHits()) {
+            searchSourceBuilder.trackTotalHits(attach.isTrackTotalHits());
+        }
+        if (attach.getExcludes() != null || attach.getIncludes() != null) {
+            searchSourceBuilder.fetchSource(attach.getIncludes(), attach.getExcludes());
+        }
+        searchRequest.source(searchSourceBuilder);
+        /**
+         * 设定routing
+         */
+        if (!StringUtils.isEmpty(attach.getRouting())) {
+            searchRequest.routing(attach.getRouting());
+        }
+        SearchResponse searchResponse = restHighLevelClient.search(searchRequest, RequestOptions.DEFAULT);
+        SearchHits hits = searchResponse.getHits();
+        SearchHit[] searchHits = hits.getHits();
+        for (SearchHit hit : searchHits) {
+            String source = hit.getSourceAsString();
+            T t = JSONObject.parseObject(source, clazz);
+            if (highLightFlag) {
+                Map<String, HighlightField> hmap = hit.getHighlightFields();
+                try {
+                    Object obj = mapToObject(hmap, clazz);
+                    BeanUtils.copyProperties(obj, t, BeanUtil.getNoValuePropertyNames(obj));
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+            list.add(t);
+            pageList.setSortValues(hit.getSortValues());
+        }
+
+        pageList.setList(list);
+        pageList.setTotalElements(hits.getTotalHits().value);
+        if (pageSortHighLight != null && pageSortHighLight.getPageSize() != 0) {
+            pageList.setTotalPages(getTotalPages(hits.getTotalHits().value, pageSortHighLight.getPageSize()));
+        }
+        return pageList;
+    }
+
+    @Override
+    public <T> List<T> searchMore(QueryBuilder queryBuilder, int limitSize, Class<T> clazz, String... indexes) throws IOException {
+        PageSortHighLight pageSortHighLight = new PageSortHighLight(1, limitSize);
+        PageList<T> pageList = search(queryBuilder, pageSortHighLight, clazz, indexes);
+        if (null != pageList) {
+            return pageList.getList();
+        }
+        return null;
+    }
+
+    @Override
+    public <T> List<T> search(QueryBuilder queryBuilder, Class<T> cls, Integer pageStart, Integer pageSize, String... idxNames) throws IOException {
+        SearchRequest searchRequest = new SearchRequest(idxNames);
+        SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
+        sourceBuilder.query(queryBuilder);
+        sourceBuilder.from(pageStart);
+        sourceBuilder.size(pageSize);
+        searchRequest.source(sourceBuilder);
         SearchResponse response = restHighLevelClient.search(searchRequest, RequestOptions.DEFAULT);
         SearchHit[] hits = response.getHits().getHits();
         return Stream.of(hits).map(hit -> {
-            return JSON.parseObject(hit.getSourceAsString(), cls);
+            String str = hit.getSourceAsString();
+            return JSON.parseObject(str, cls);
         }).collect(Collectors.toList());
     }
 
-    @Override
-    public void deleteByQuery(String idxName, QueryBuilder queryBuilder) throws IOException {
-        DeleteByQueryRequest queryRequest = new DeleteByQueryRequest();
-        queryRequest.setQuery(queryBuilder);
-        queryRequest.setBatchSize(1000);
-        queryRequest.setConflicts("proceed");
-        restHighLevelClient.deleteByQuery(queryRequest, RequestOptions.DEFAULT);
+    private Object mapToObject(Map map, Class<?> clazz) throws Exception {
+        if (null == map) {
+            return null;
+        }
+        Object obj = clazz.newInstance();
+        Field[] fields = obj.getClass().getDeclaredFields();
+        for (Field field : fields) {
+            Object fieldInstance = map.get(field.getName());
+            if (fieldInstance != null && !StringUtils.isEmpty(fieldInstance)) {
+                int modifiers = field.getModifiers();
+                if (Modifier.isStatic(modifiers) || Modifier.isFinal(modifiers)) {
+                    continue;
+                }
+                field.setAccessible(true);
+                if (fieldInstance instanceof HighLight && ((HighlightField) fieldInstance).fragments().length > 0) {
+                    field.set(obj, ((HighlightField) fieldInstance).fragments()[0].toString());
+                }
+            }
+        }
+        return obj;
     }
 
-
+    private int getTotalPages(long totalHits, int pageSize) {
+        return pageSize == 0 ? 1 : (int) Math.ceil((double) totalHits / (double) pageSize);
+    }
 }

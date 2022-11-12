@@ -1,7 +1,15 @@
 package com.smile.service;
 
+import com.smile.domain.Attach;
 import com.smile.domain.IdxEntity;
+import com.smile.domain.PageList;
+import com.smile.domain.PageSortHighLight;
+import org.elasticsearch.action.bulk.BulkResponse;
+import org.elasticsearch.action.delete.DeleteResponse;
+import org.elasticsearch.action.search.SearchRequest;
+import org.elasticsearch.action.search.SearchResponse;
 import org.elasticsearch.index.query.QueryBuilder;
+import org.elasticsearch.index.reindex.BulkByScrollResponse;
 import org.elasticsearch.search.builder.SearchSourceBuilder;
 
 import java.io.IOException;
@@ -50,9 +58,10 @@ public interface ElasticsearchService {
      *
      * @param idxName
      * @param idxEntity
+     * @return
      * @throws IOException
      */
-    void insertOrUpdate(String idxName, IdxEntity idxEntity) throws IOException;
+    boolean insertOrUpdate(String idxName, IdxEntity idxEntity) throws IOException;
 
 
     /**
@@ -60,9 +69,10 @@ public interface ElasticsearchService {
      *
      * @param idxName
      * @param idxEntity
+     * @return
      * @throws IOException
      */
-    void indexUpdate(String idxName, IdxEntity idxEntity) throws IOException;
+    boolean indexUpdate(String idxName, IdxEntity idxEntity) throws IOException;
 
     /**
      * upsert
@@ -80,7 +90,7 @@ public interface ElasticsearchService {
      * @param list
      * @throws IOException
      */
-    void insertBatch(String idxName, List<IdxEntity> list) throws IOException;
+    BulkResponse insertBatch(String idxName, List<IdxEntity> list) throws IOException;
 
     /**
      * 批量删除
@@ -109,26 +119,73 @@ public interface ElasticsearchService {
      * @return
      * @throws IOException
      */
-    void deleteIndex(String idxName, String id) throws IOException;
+    boolean deleteIndex(String idxName, String id) throws IOException;
+
+    /**
+     * 根据条件删除索引
+     *
+     * @param indexName
+     * @param queryBuilder
+     * @return
+     * @throws IOException
+     */
+    BulkByScrollResponse deleteByCondition(String indexName, QueryBuilder queryBuilder) throws IOException;
 
     /**
      * 检索
      *
-     * @param idxName
      * @param builder
      * @param cls
+     * @param pageStart
+     * @param pageSize
+     * @param idxName
      * @param <T>
      * @return
      * @throws IOException
      */
-    <T> List<T> search(String idxName, SearchSourceBuilder builder, Class<T> cls) throws IOException;
+    <T> List<T> search(QueryBuilder builder, Class<T> cls, Integer pageStart, Integer pageSize, String... idxName) throws IOException;
 
     /**
-     * 删除查询索引
+     * 原生查询
      *
-     * @param idxName
-     * @param queryBuilder
+     * @param request
+     * @return
      * @throws IOException
      */
-    void deleteByQuery(String idxName, QueryBuilder queryBuilder) throws IOException;
+    SearchResponse search(SearchRequest request) throws IOException;
+
+    /**
+     * 支持分页、高亮、排序的查询（跨索引）
+     *
+     * @param queryBuilder
+     * @param pageSortHighLight
+     * @param clazz
+     * @param indexes
+     * @param <T>
+     * @return
+     */
+    <T> PageList<T> search(QueryBuilder queryBuilder, PageSortHighLight pageSortHighLight, Class<T> clazz, String... indexes) throws IOException;
+
+    /**
+     * 支持分页、高亮、排序、指定返回字段、路由的查询
+     *
+     * @param queryBuilder
+     * @param attach
+     * @param clazz
+     * @param <T>
+     * @return
+     */
+    <T> PageList<T> search(QueryBuilder queryBuilder, Attach attach, Class<T> clazz, String... indexes) throws IOException;
+
+    /**
+     * 非分页查询，指定最大返回条数
+     *
+     * @param queryBuilder
+     * @param limitSize
+     * @param clazz
+     * @param indexes
+     * @param <T>
+     * @return
+     */
+    <T> List<T> searchMore(QueryBuilder queryBuilder, int limitSize, Class<T> clazz, String... indexes) throws IOException;
 }

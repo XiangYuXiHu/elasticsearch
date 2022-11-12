@@ -9,7 +9,10 @@ public enum BaseEnum {
     INDEX_EXIST(10001, "索引已存在"),
     INDEX_UPDATE_ID_NOT_EXIST(10002, "更新索引需id"),
     FAILURE(10024, "失败"),
-    SERVER_ERROR(10500, "系统异常");
+    SERVER_ERROR(10500, "系统异常"),
+    PAGE_SORT_HIGH_LIGHT_ERROR(10501, "pageSortHightLight不能为空"),
+    ATTACH_ERROR(10501, "attach不能为空"),
+    ;
 
     private int code;
     private String message;

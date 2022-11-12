@@ -18,6 +18,12 @@
         <elasticsearch.version>7.2.0</elasticsearch.version>
         <fastjson.version>1.2.58</fastjson.version>
     </properties>
+
+    <modules>
+        <module>es-client</module>
+        <module>es-tool</module>
+    </modules>
+
     <dependencies>
         <dependency>
             <groupId>org.springframework.boot</groupId>
