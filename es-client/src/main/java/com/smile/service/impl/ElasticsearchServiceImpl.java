@@ -14,6 +14,7 @@ import org.elasticsearch.action.bulk.BulkRequest;
 import org.elasticsearch.action.bulk.BulkResponse;
 import org.elasticsearch.action.delete.DeleteRequest;
 import org.elasticsearch.action.delete.DeleteResponse;
+import org.elasticsearch.action.get.*;
 import org.elasticsearch.action.index.IndexRequest;
 import org.elasticsearch.action.index.IndexResponse;
 import org.elasticsearch.action.search.SearchRequest;
@@ -78,6 +79,17 @@ public class ElasticsearchServiceImpl implements ElasticsearchService {
         request.includeDefaults(false);
         return restHighLevelClient.indices().exists(request, RequestOptions.DEFAULT);
     }
+
+    @Override
+    public boolean exist(String id, String idxName) throws Exception {
+        GetRequest request = new GetRequest(idxName, id);
+        GetResponse response = restHighLevelClient.get(request, RequestOptions.DEFAULT);
+        if (response.isExists()) {
+            return true;
+        }
+        return false;
+    }
+
 
     @Override
     public boolean createIndex(String idxName, String idxSQL) throws IOException {
@@ -371,6 +383,36 @@ public class ElasticsearchServiceImpl implements ElasticsearchService {
         return countResponse.getCount();
     }
 
+    @Override
+    public <T> T getById(String id, String indexName, Class<T> clazz) throws IOException {
+        if (StringUtils.isEmpty(id)) {
+            throw new BizException(ID_NOT_EXIST);
+        }
+        GetRequest request = new GetRequest(indexName, id);
+        GetResponse response = restHighLevelClient.get(request, RequestOptions.DEFAULT);
+        if (response.isExists()) {
+            return JSONObject.parseObject(response.getSourceAsString(), clazz);
+        }
+        return null;
+    }
+
+    @Override
+    public <T> List<T> mgetById(String[] ids, String indexName, Class<T> clazz) throws IOException {
+        MultiGetRequest multiGetRequest = new MultiGetRequest();
+        for (int i = 0; i < ids.length; i++) {
+            multiGetRequest.add(new MultiGetRequest.Item(indexName, ids[i]));
+        }
+        MultiGetResponse response = restHighLevelClient.mget(multiGetRequest, RequestOptions.DEFAULT);
+        List<T> list = new ArrayList<>();
+        for (int i = 0; i < response.getResponses().length; i++) {
+            MultiGetItemResponse item = response.getResponses()[i];
+            GetResponse itemResponse = item.getResponse();
+            if (itemResponse.isExists()) {
+                list.add(JSONObject.parseObject(itemResponse.getSourceAsString(), clazz));
+            }
+        }
+        return list;
+    }
 
 
     @Override

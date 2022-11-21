@@ -34,6 +34,14 @@ public interface ElasticsearchService {
     boolean indexExist(String idxName) throws IOException;
 
     /**
+     * id是否存在
+     *
+     * @return
+     * @throws Exception
+     */
+    boolean exist(String id, String idxName) throws Exception;
+
+    /**
      * 创建索引
      *
      * @param idxName
@@ -200,6 +208,32 @@ public interface ElasticsearchService {
      * @param indexes
      * @param <T>
      * @return
+     * @throws IOException
      */
     <T> long count(QueryBuilder queryBuilder, Class<T> clazz, String... indexes) throws IOException;
+
+    /**
+     * 根据id获取信息
+     *
+     * @param id
+     * @param indexName
+     * @param clazz
+     * @param <T>
+     * @return
+     * @throws IOException
+     */
+    <T> T getById(String id, String indexName, Class<T> clazz) throws IOException;
+
+    /**
+     * 根据ID列表批量查询
+     *
+     * @param ids
+     * @param indexName
+     * @param clazz
+     * @param <T>
+     * @return
+     */
+    <T> List<T> mgetById(String[] ids, String indexName, Class<T> clazz) throws IOException;
+
+    
 }

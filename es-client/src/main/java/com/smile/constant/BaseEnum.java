@@ -12,7 +12,7 @@ public enum BaseEnum {
     SERVER_ERROR(10500, "系统异常"),
     PAGE_SORT_HIGH_LIGHT_ERROR(10501, "pageSortHightLight不能为空"),
     ATTACH_ERROR(10501, "attach不能为空"),
-    ;
+    ID_NOT_EXIST(10502, "主键不能为空");
 
     private int code;
     private String message;
