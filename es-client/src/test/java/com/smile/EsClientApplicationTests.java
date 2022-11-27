@@ -7,7 +7,7 @@ import org.elasticsearch.action.search.*;
 import org.elasticsearch.client.RequestOptions;
 import org.elasticsearch.client.RestHighLevelClient;
 import org.elasticsearch.common.unit.Fuzziness;
-import org.elasticsearch.common.unit.TimeValue;
+import org.elasticsearch.core.TimeValue;
 import org.elasticsearch.index.query.MatchQueryBuilder;
 import org.elasticsearch.index.query.QueryBuilders;
 import org.elasticsearch.search.SearchHit;
@@ -34,13 +34,26 @@ import java.util.stream.Stream;
 @Slf4j
 @RunWith(SpringRunner.class)
 @SpringBootTest
-class EsClientApplicationTests {
+public class EsClientApplicationTests {
 
     @Autowired
     private ElasticsearchService elasticsearchService;
 
     @Autowired
     private RestHighLevelClient restHighLevelClient;
+
+    @Test
+    public void indexExistTest() throws IOException {
+        boolean blogIndex = elasticsearchService.indexExist("blog_index");
+        log.info("索引是否存在:{}", blogIndex);
+    }
+
+    @Test
+    public void indexExistsTest() throws Exception {
+        boolean blogIndex = elasticsearchService.exist("1", "blog_index");
+        log.info("索引是否存在:{}", blogIndex);
+    }
+
 
     @Test
     public void testAddIndex() throws IOException {
@@ -50,9 +63,22 @@ class EsClientApplicationTests {
         Map<String, Object> data = new HashMap<>();
         data.put("username", "jim");
         data.put("postDay", new Date());
-        data.put("message", "foo");
+        data.put("message", "foo boy");
         entity.setData(data);
-        elasticsearchService.insertOrUpdate("user", entity);
+        elasticsearchService.insertOrUpdate("student", entity);
+    }
+
+    @Test
+    public void testUpdateIndex() throws IOException {
+        IdxEntity<Object> entity = new IdxEntity<>();
+        entity.setId("1");
+
+        Map<String, Object> data = new HashMap<>();
+        data.put("username", "jack");
+        data.put("postDay", new Date());
+        data.put("message", "foo boy!!");
+        entity.setData(data);
+        elasticsearchService.indexUpdate("student", entity);
     }
 
     @Test
@@ -61,12 +87,19 @@ class EsClientApplicationTests {
         entity.setId("2");
 
         Map<String, Object> data = new HashMap<>();
-        data.put("username", "jack");
+        data.put("username", "jack`");
         data.put("postDay", new Date());
-        data.put("message", "foo1");
+        data.put("message", "foo girl @@^^");
         entity.setData(data);
-        elasticsearchService.upsert("user", entity);
+        elasticsearchService.upsert("student", entity);
     }
+
+
+
+
+
+
+
 
     @Test
     public void testScrollQuery() throws IOException {

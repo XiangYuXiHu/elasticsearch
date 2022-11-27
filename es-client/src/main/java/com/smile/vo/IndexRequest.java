@@ -44,7 +44,39 @@ public class IndexRequest {
 
     /**
      * idxName : idx_location
-     * idxSql : {"dynamic":false,"properties":{"location_id":{"type":"long"},"flag":{"type":"text","index":true},"local_code":{"type":"text","index":true},"local_name":{"type":"text","index":true,"analyzer":"ik_max_word"},"lv":{"type":"long"},"sup_local_code":{"type":"text","index":true},"url":{"type":"text","index":true}}}
+     * idxSql :
+     * {
+     *     "dynamic": false,
+     *     "properties": {
+     *         "location_id": {
+     *             "type": "long"
+     *         },
+     *         "flag": {
+     *             "type": "text",
+     *             "index": true
+     *         },
+     *         "local_code": {
+     *             "type": "text",
+     *             "index": true
+     *         },
+     *         "local_name": {
+     *             "type": "text",
+     *             "index": true,
+     *             "analyzer": "ik_max_word"
+     *         },
+     *         "lv": {
+     *             "type": "long"
+     *         },
+     *         "sup_local_code": {
+     *             "type": "text",
+     *             "index": true
+     *         },
+     *         "url": {
+     *             "type": "text",
+     *             "index": true
+     *         }
+     *     }
+     * }
      */
     static class IndexSql {
         private boolean dynamic = false;

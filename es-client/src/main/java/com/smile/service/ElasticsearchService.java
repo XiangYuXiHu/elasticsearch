@@ -36,6 +36,8 @@ public interface ElasticsearchService {
     /**
      * id是否存在
      *
+     * @param id
+     * @param idxName
      * @return
      * @throws Exception
      */
@@ -89,7 +91,7 @@ public interface ElasticsearchService {
      * @param idxEntity
      * @throws IOException
      */
-    void upsert(String idxName, IdxEntity idxEntity) throws IOException;
+    boolean upsert(String idxName, IdxEntity idxEntity) throws IOException;
 
     /**
      * 批量插入
@@ -235,5 +237,5 @@ public interface ElasticsearchService {
      */
     <T> List<T> mgetById(String[] ids, String indexName, Class<T> clazz) throws IOException;
 
-    
+
 }

@@ -30,7 +30,6 @@ import org.elasticsearch.client.indices.CreateIndexRequest;
 import org.elasticsearch.client.indices.CreateIndexResponse;
 import org.elasticsearch.client.indices.GetIndexRequest;
 import org.elasticsearch.common.settings.Settings;
-import org.elasticsearch.common.xcontent.XContentType;
 import org.elasticsearch.index.query.QueryBuilder;
 import org.elasticsearch.index.reindex.BulkByScrollResponse;
 import org.elasticsearch.index.reindex.DeleteByQueryRequest;
@@ -41,6 +40,7 @@ import org.elasticsearch.search.fetch.subphase.highlight.HighlightBuilder;
 import org.elasticsearch.search.fetch.subphase.highlight.HighlightField;
 import org.elasticsearch.search.sort.FieldSortBuilder;
 import org.elasticsearch.search.sort.SortOrder;
+import org.elasticsearch.xcontent.XContentType;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -89,7 +89,6 @@ public class ElasticsearchServiceImpl implements ElasticsearchService {
         }
         return false;
     }
-
 
     @Override
     public boolean createIndex(String idxName, String idxSQL) throws IOException {
@@ -177,11 +176,19 @@ public class ElasticsearchServiceImpl implements ElasticsearchService {
     }
 
     @Override
-    public void upsert(String idxName, IdxEntity idxEntity) throws IOException {
+    public boolean upsert(String idxName, IdxEntity idxEntity) throws IOException {
         IndexRequest indexRequest = new IndexRequest(idxName).source(idxEntity.getData());
         UpdateRequest upsert = new UpdateRequest(idxName, idxEntity.getId()).upsert(indexRequest);
         upsert.doc(indexRequest);
-        restHighLevelClient.update(upsert, RequestOptions.DEFAULT);
+        UpdateResponse updateResponse = restHighLevelClient.update(upsert, RequestOptions.DEFAULT);
+        if (DocWriteResponse.Result.CREATED == updateResponse.getResult()) {
+            log.info("INDEX:{} CREATE SUCCESS", idxName);
+        } else if (DocWriteResponse.Result.UPDATED == updateResponse.getResult()) {
+            log.info("INDEX:{} UPDATE SUCCESS", idxName);
+        } else {
+            return false;
+        }
+        return true;
     }
 
 
