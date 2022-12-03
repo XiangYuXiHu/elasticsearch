@@ -1,15 +1,19 @@
 package com.smile;
 
+import com.smile.business.Student;
 import com.smile.domain.IdxEntity;
 import com.smile.service.ElasticsearchService;
 import lombok.extern.slf4j.Slf4j;
+import org.elasticsearch.action.bulk.BulkResponse;
 import org.elasticsearch.action.search.*;
 import org.elasticsearch.client.RequestOptions;
 import org.elasticsearch.client.RestHighLevelClient;
 import org.elasticsearch.common.unit.Fuzziness;
 import org.elasticsearch.core.TimeValue;
 import org.elasticsearch.index.query.MatchQueryBuilder;
+import org.elasticsearch.index.query.QueryBuilder;
 import org.elasticsearch.index.query.QueryBuilders;
+import org.elasticsearch.index.reindex.BulkByScrollResponse;
 import org.elasticsearch.search.SearchHit;
 import org.elasticsearch.search.aggregations.AggregationBuilders;
 import org.elasticsearch.search.aggregations.Aggregations;
@@ -25,10 +29,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.junit4.SpringRunner;
 
 import java.io.IOException;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Stream;
 
 @Slf4j
@@ -94,9 +95,65 @@ public class EsClientApplicationTests {
         elasticsearchService.upsert("student", entity);
     }
 
+    @Test
+    public void testInsertBatch() throws IOException {
+        List<IdxEntity> list = new ArrayList<>();
 
+        IdxEntity<Object> lucy = new IdxEntity<>();
+        lucy.setId("3");
+        Map<String, Object> data = new HashMap<>();
+        data.put("username", "lucy");
+        data.put("postDay", new Date());
+        data.put("message", "foo boy!!");
+        lucy.setData(data);
+        list.add(lucy);
 
+        IdxEntity<Object> lily = new IdxEntity<>();
+        lily.setId("4");
+        HashMap<String, Object> lilyInfo = new HashMap<>();
+        lilyInfo.put("username", "lily");
+        lilyInfo.put("postDay", new Date());
+        lilyInfo.put("message", "like boy!!");
+        lily.setData(lilyInfo);
+        list.add(lily);
 
+        BulkResponse response = elasticsearchService.insertBatch("student", list);
+        log.info("{}", response.hasFailures());
+    }
+
+    @Test
+    public void deleteBatch() throws IOException {
+        List<String> ids = new ArrayList<>();
+        ids.add("1");
+        ids.add("2");
+        elasticsearchService.deleteBatch("student", ids);
+    }
+
+    @Test
+    public void deleteIndexTest() throws IOException {
+        boolean isDelete = elasticsearchService.deleteIndex("student", "3");
+        log.info("{}", isDelete);
+    }
+
+    @Test
+    public void deleteIndex() throws IOException {
+        boolean isDelete = elasticsearchService.deleteIndex("blog_lastest");
+        log.info("{}", isDelete);
+    }
+
+    @Test
+    public void deleteByCondition() throws IOException {
+        QueryBuilder queryBuilder = QueryBuilders.matchQuery("username", "lily");
+        BulkByScrollResponse delete = elasticsearchService.deleteByCondition("student", queryBuilder);
+        log.info("{}", delete.getDeleted());
+    }
+
+    @Test
+    public void searchTest() throws IOException {
+        MatchQueryBuilder queryBuilder = QueryBuilders.matchQuery("username", "lily");
+        List<Student> data = elasticsearchService.search(queryBuilder, Student.class, 0, 5, new String[]{"student"});
+        log.info("data:{}", data);
+    }
 
 
 
