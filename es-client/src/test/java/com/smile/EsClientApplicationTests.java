@@ -99,10 +99,34 @@ public class EsClientApplicationTests {
     public void testInsertBatch() throws IOException {
         List<IdxEntity> list = new ArrayList<>();
 
+        IdxEntity<Object> jim = new IdxEntity<>();
+        jim.setId("1");
+        Map<String, Object> data1 = new HashMap<>();
+        data1.put("username", "jim");
+        data1.put("age", 28);
+        data1.put("salary", 28000);
+        data1.put("postDay", new Date());
+        data1.put("message", "foo baby!!");
+        jim.setData(data1);
+        list.add(jim);
+
+        IdxEntity<Object> jack = new IdxEntity<>();
+        jack.setId("2");
+        Map<String, Object> data2 = new HashMap<>();
+        data2.put("username", "jack");
+        data2.put("age", 28);
+        data2.put("salary", 38000);
+        data2.put("postDay", new Date());
+        data2.put("message", "foo baby2!!");
+        jack.setData(data2);
+        list.add(jack);
+
         IdxEntity<Object> lucy = new IdxEntity<>();
         lucy.setId("3");
         Map<String, Object> data = new HashMap<>();
         data.put("username", "lucy");
+        data.put("age", 23);
+        data.put("salary", 21000);
         data.put("postDay", new Date());
         data.put("message", "foo boy!!");
         lucy.setData(data);
@@ -112,6 +136,8 @@ public class EsClientApplicationTests {
         lily.setId("4");
         HashMap<String, Object> lilyInfo = new HashMap<>();
         lilyInfo.put("username", "lily");
+        lilyInfo.put("age", 25);
+        lilyInfo.put("salary", 20000);
         lilyInfo.put("postDay", new Date());
         lilyInfo.put("message", "like boy!!");
         lily.setData(lilyInfo);
