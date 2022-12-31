@@ -1,7 +1,6 @@
 package com.smile.domain;
 
 import org.elasticsearch.search.fetch.subphase.highlight.HighlightBuilder;
-import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
 import java.util.List;

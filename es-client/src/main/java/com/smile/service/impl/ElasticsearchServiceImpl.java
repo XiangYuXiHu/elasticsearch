@@ -74,8 +74,14 @@ public class ElasticsearchServiceImpl implements ElasticsearchService {
     @Override
     public boolean indexExist(String idxName) throws IOException {
         GetIndexRequest request = new GetIndexRequest(idxName);
+        /**
+         * 是返回本地信息还是从主节点检索状态
+         */
         request.local(false);
         request.humanReadable(true);
+        /**
+         * 是否返回每个索引的所有默认设置
+         */
         request.includeDefaults(false);
         return restHighLevelClient.indices().exists(request, RequestOptions.DEFAULT);
     }
@@ -164,6 +170,22 @@ public class ElasticsearchServiceImpl implements ElasticsearchService {
         }
         UpdateRequest updateRequest = new UpdateRequest(idxName, id);
         updateRequest.doc(idxEntity.getData());
+        /**
+         * true，表明如果文档不存在，则更新的文档内容作为新的内容插入文档
+         */
+        updateRequest.docAsUpsert(true);
+        /**
+         * true，表明无论文档是否存在，脚本都会执行（如果不存在时，会创建一个新的文档）
+         */
+        updateRequest.scriptedUpsert(true);
+        /**
+         * 如果更新的过程中，文档被其它线程进行更新的话，会产生冲突，这个为设置更新失败后重试的次数
+         */
+        updateRequest.retryOnConflict(3);
+        /**
+         * 文档内容作为结果返回，默认是禁止的
+         */
+        updateRequest.fetchSource(true);
         UpdateResponse updateResponse = restHighLevelClient.update(updateRequest, RequestOptions.DEFAULT);
         if (updateResponse.getResult() == DocWriteResponse.Result.CREATED) {
             log.info("INDEX:{} CREATE SUCCESS", idxName);
@@ -299,12 +321,12 @@ public class ElasticsearchServiceImpl implements ElasticsearchService {
             } else if (highLight != null && highLight.getHighLightList() != null && highLight.getHighLightList().size() != 0) {
                 HighlightBuilder highlightBuilder = new HighlightBuilder();
                 if (!StringUtils.isEmpty(highLight.getPreTag()) && !StringUtils.isEmpty(highLight.getPostTag())) {
-                    highLight.setPreTag(highLight.getPreTag());
-                    highLight.setPostTag(highLight.getPostTag());
+                    highlightBuilder.preTags(highLight.getPreTag());
+                    highlightBuilder.postTags(highLight.getPostTag());
                 }
                 for (int i = 0; i < highLight.getHighLightList().size(); i++) {
                     highLightFlag = true;
-                    highlightBuilder.field(highLight.getHighLightList().get(i), 0);
+                    highlightBuilder.requireFieldMatch(false).field(highLight.getHighLightList().get(i));
                 }
                 searchSourceBuilder.highlighter(highlightBuilder);
             }
@@ -453,7 +475,7 @@ public class ElasticsearchServiceImpl implements ElasticsearchService {
                     continue;
                 }
                 field.setAccessible(true);
-                if (fieldInstance instanceof HighLight && ((HighlightField) fieldInstance).fragments().length > 0) {
+                if (fieldInstance instanceof HighlightField && ((HighlightField) fieldInstance).fragments().length > 0) {
                     field.set(obj, ((HighlightField) fieldInstance).fragments()[0].toString());
                 }
             }

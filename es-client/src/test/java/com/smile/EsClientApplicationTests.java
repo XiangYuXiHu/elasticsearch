@@ -1,25 +1,31 @@
 package com.smile;
 
 import com.smile.business.Student;
-import com.smile.domain.IdxEntity;
+import com.smile.domain.*;
 import com.smile.service.ElasticsearchService;
 import lombok.extern.slf4j.Slf4j;
 import org.elasticsearch.action.bulk.BulkResponse;
 import org.elasticsearch.action.search.*;
 import org.elasticsearch.client.RequestOptions;
 import org.elasticsearch.client.RestHighLevelClient;
+import org.elasticsearch.common.text.Text;
 import org.elasticsearch.common.unit.Fuzziness;
 import org.elasticsearch.core.TimeValue;
+import org.elasticsearch.index.query.MatchAllQueryBuilder;
 import org.elasticsearch.index.query.MatchQueryBuilder;
 import org.elasticsearch.index.query.QueryBuilder;
 import org.elasticsearch.index.query.QueryBuilders;
 import org.elasticsearch.index.reindex.BulkByScrollResponse;
 import org.elasticsearch.search.SearchHit;
+import org.elasticsearch.search.SearchHits;
 import org.elasticsearch.search.aggregations.AggregationBuilders;
 import org.elasticsearch.search.aggregations.Aggregations;
 import org.elasticsearch.search.aggregations.bucket.terms.Terms;
 import org.elasticsearch.search.aggregations.bucket.terms.TermsAggregationBuilder;
 import org.elasticsearch.search.builder.SearchSourceBuilder;
+import org.elasticsearch.search.fetch.subphase.highlight.HighlightBuilder;
+import org.elasticsearch.search.fetch.subphase.highlight.HighlightField;
+import org.elasticsearch.search.sort.FieldSortBuilder;
 import org.elasticsearch.search.sort.ScoreSortBuilder;
 import org.elasticsearch.search.sort.SortOrder;
 import org.junit.Test;
@@ -181,7 +187,86 @@ public class EsClientApplicationTests {
         log.info("data:{}", data);
     }
 
+    @Test
+    public void basicSearchTest() throws IOException {
+        SearchRequest searchRequest = new SearchRequest("student");
+        QueryBuilder queryBuilder = QueryBuilders.matchQuery("username", "lucy");
+        SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
+        sourceBuilder.query(queryBuilder);
+        searchRequest.source(sourceBuilder);
+        SearchResponse response = elasticsearchService.search(searchRequest);
+        SearchHit[] hits = response.getHits().getHits();
+        for (SearchHit hit : hits) {
+            System.out.println(hit.getSourceAsString());
+        }
+    }
 
+    @Test
+    public void sortSearchTest() throws IOException {
+        MatchAllQueryBuilder queryBuilder = QueryBuilders.matchAllQuery();
+//        ScoreSortBuilder scoreSortBuilder = new ScoreSortBuilder();
+//        ScoreSortBuilder scoreOrder = scoreSortBuilder.order(SortOrder.ASC);
+        FieldSortBuilder ageSort = new FieldSortBuilder("age").order(SortOrder.ASC);
+        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder().query(queryBuilder).sort(ageSort);
+
+        SearchRequest searchRequest = new SearchRequest("student");
+        searchRequest.source(searchSourceBuilder);
+        SearchResponse response = restHighLevelClient.search(searchRequest, RequestOptions.DEFAULT);
+        SearchHit[] hits = response.getHits().getHits();
+        Stream.of(hits).forEach(hit -> {
+            log.info(hit.getSourceAsString());
+        });
+    }
+
+    @Test
+    public void highLightTest() throws IOException {
+        SearchRequest searchRequest = new SearchRequest("student");
+        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
+        searchSourceBuilder.from(0);
+        searchSourceBuilder.size(5);
+
+        MatchQueryBuilder queryBuilder = QueryBuilders.matchQuery("username", "jim");
+        HighlightBuilder highlightBuilder = new HighlightBuilder();
+        highlightBuilder.requireFieldMatch(false).field("username")
+                .preTags("<b><font color=red>").postTags("</font></b>");
+        searchSourceBuilder.highlighter(highlightBuilder);
+        searchSourceBuilder.query(queryBuilder);
+        searchRequest.source(searchSourceBuilder);
+        SearchResponse response = restHighLevelClient.search(searchRequest, RequestOptions.DEFAULT);
+        SearchHits hits = response.getHits();
+        SearchHit[] h = hits.getHits();
+        for (SearchHit hit : h) {
+            Map<String, HighlightField> highlightFields = hit.getHighlightFields();
+            HighlightField highlightField = highlightFields.get("username");
+            if (null != highlightField) {
+                log.info(highlightField.getName());
+                Text[] fragments = highlightField.getFragments();
+                log.info("高亮显示结果" + fragments[0]);
+            }
+            log.info("结果：" + hit.getSourceAsString());
+        }
+    }
+
+    @Test
+    public void pageSortHighLightSearchTest() throws IOException {
+        int pageStart = 1;
+        int pageSize = 10;
+
+        PageSortHighLight pageSortHighLight = new PageSortHighLight(pageStart, pageSize);
+        /**
+         * 排序
+         */
+        Sort.Order ageOrder = new Sort.Order(SortOrder.ASC, "age");
+        pageSortHighLight.setSort(new Sort(ageOrder));
+        /**
+         * 定制高亮，如果定制高亮，返回结果会自动替换字段值为高亮内容
+         */
+        pageSortHighLight.setHighLight(new HighLight().field("username"));
+        PageList<Student> studentPage = elasticsearchService.search(QueryBuilders.matchQuery("username", "jim"), pageSortHighLight, Student.class);
+        studentPage.getList().forEach(e -> {
+            System.out.println(e);
+        });
+    }
 
 
     @Test
