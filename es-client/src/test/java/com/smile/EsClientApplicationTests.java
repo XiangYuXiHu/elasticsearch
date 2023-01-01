@@ -248,6 +248,27 @@ public class EsClientApplicationTests {
     }
 
     @Test
+    public void searchAfterTest() throws IOException {
+        SearchRequest searchRequest = new SearchRequest("student");
+        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
+        searchSourceBuilder.query(QueryBuilders.matchAllQuery());
+        searchSourceBuilder.sort("salary", SortOrder.ASC);
+        searchSourceBuilder.size(1);
+        searchRequest.source(searchSourceBuilder);
+        SearchResponse response = restHighLevelClient.search(searchRequest, RequestOptions.DEFAULT);
+        SearchHit[] hits = response.getHits().getHits();
+        while (hits.length > 0) {
+            Stream.of(hits).forEach(hit -> {
+                log.info(hit.getSourceAsString());
+            });
+            SearchHit last = hits[hits.length - 1];
+            searchSourceBuilder.searchAfter(last.getSortValues());
+            response = restHighLevelClient.search(searchRequest, RequestOptions.DEFAULT);
+            hits = response.getHits().getHits();
+        }
+    }
+
+    @Test
     public void pageSortHighLightSearchTest() throws IOException {
         int pageStart = 1;
         int pageSize = 10;
@@ -267,6 +288,13 @@ public class EsClientApplicationTests {
             System.out.println(e);
         });
     }
+
+
+
+
+
+
+
 
 
     @Test
