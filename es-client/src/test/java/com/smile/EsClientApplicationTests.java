@@ -20,13 +20,19 @@ import org.elasticsearch.search.SearchHit;
 import org.elasticsearch.search.SearchHits;
 import org.elasticsearch.search.aggregations.AggregationBuilders;
 import org.elasticsearch.search.aggregations.Aggregations;
+import org.elasticsearch.search.aggregations.bucket.filter.Filters;
+import org.elasticsearch.search.aggregations.bucket.filter.FiltersAggregationBuilder;
+import org.elasticsearch.search.aggregations.bucket.filter.FiltersAggregator;
+import org.elasticsearch.search.aggregations.bucket.range.Range;
 import org.elasticsearch.search.aggregations.bucket.terms.Terms;
 import org.elasticsearch.search.aggregations.bucket.terms.TermsAggregationBuilder;
+import org.elasticsearch.search.aggregations.metrics.*;
 import org.elasticsearch.search.builder.SearchSourceBuilder;
 import org.elasticsearch.search.fetch.subphase.highlight.HighlightBuilder;
 import org.elasticsearch.search.fetch.subphase.highlight.HighlightField;
 import org.elasticsearch.search.sort.FieldSortBuilder;
 import org.elasticsearch.search.sort.ScoreSortBuilder;
+import org.elasticsearch.search.sort.SortBuilders;
 import org.elasticsearch.search.sort.SortOrder;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -290,11 +296,83 @@ public class EsClientApplicationTests {
     }
 
 
+    @Test
+    public void countTest() throws IOException {
+        MatchQueryBuilder queryBuilder = QueryBuilders.matchQuery("username", "jim");
+        long studentCount = elasticsearchService.count(queryBuilder, null, "student");
+        System.out.println(studentCount);
+    }
 
+    @Test
+    public void queryByIdTest() throws IOException {
+        Student student = elasticsearchService.getById("1", "student", Student.class);
+        System.out.println(student);
+    }
 
+    @Test
+    public void multiQueryTest() throws IOException {
+        List<Student> students = elasticsearchService.mgetById(new String[]{"1", "2"}, "student", Student.class);
+        System.out.println(students);
+    }
 
+    @Test
+    public void studentAvgAge() throws IOException {
+        SearchRequest request = new SearchRequest("student");
+        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
+        searchSourceBuilder.aggregation(AggregationBuilders.avg("avg_age")
+                .field("age"))
+                .sort(SortBuilders.fieldSort("age").order(SortOrder.ASC)).size(0);
+        request.source(searchSourceBuilder);
+        SearchResponse response = restHighLevelClient.search(request, RequestOptions.DEFAULT);
+        ParsedAvg avgAge = response.getAggregations().get("avg_age");
+        System.out.println(avgAge.getValue());
+    }
 
+    @Test
+    public void studentStateTest() throws IOException {
+        SearchRequest request = new SearchRequest("student");
+        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
+        searchSourceBuilder.aggregation(AggregationBuilders.stats("stat_age").field("age")).size(0);
+        request.source(searchSourceBuilder);
+        SearchResponse response = restHighLevelClient.search(request, RequestOptions.DEFAULT);
+        ParsedStats statAge = response.getAggregations().get("stat_age");
+        System.out.println(statAge.getMax());
+        System.out.println(statAge.getMin());
+        System.out.println(statAge.getAvg());
+        System.out.println(statAge.getCount());
+        System.out.println(statAge.getSum());
+    }
 
+    @Test
+    public void studentAgeTest() throws IOException {
+        SearchRequest searchRequest = new SearchRequest("student");
+        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
+        searchSourceBuilder.aggregation(AggregationBuilders.terms("age_term").field("age")
+                .subAggregation(AggregationBuilders.terms("salary_term").field("salary")));
+        searchRequest.source(searchSourceBuilder);
+        SearchResponse response = restHighLevelClient.search(searchRequest, RequestOptions.DEFAULT);
+        Terms ageTerms = response.getAggregations().get("age_term");
+        for (Terms.Bucket ageTerm : ageTerms.getBuckets()) {
+            Terms salaryTerms = ageTerm.getAggregations().get("salary_term");
+            for (Terms.Bucket salaryTerm : salaryTerms.getBuckets()) {
+                System.out.println("age: " + ageTerm.getKeyAsString() + " salary:" + salaryTerm.getKeyAsString());
+            }
+        }
+    }
+
+    @Test
+    public void rangeTest() throws IOException {
+        SearchRequest request = new SearchRequest("student");
+        SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
+        sourceBuilder.aggregation(AggregationBuilders.range("age_range").field("age")
+                .addUnboundedTo(25).addRange(25, 30).addUnboundedFrom(30));
+        request.source(sourceBuilder);
+        SearchResponse response = restHighLevelClient.search(request, RequestOptions.DEFAULT);
+        Range ageRange = response.getAggregations().get("age_range");
+        for (Range.Bucket ageBucket : ageRange.getBuckets()) {
+            System.out.println(ageBucket.getKey() + "  " + ageBucket.getDocCount());
+        }
+    }
 
 
     @Test
@@ -348,4 +426,72 @@ public class EsClientApplicationTests {
             log.info(b.getKeyAsString() + ":" + b.getDocCount());
         });
     }
+
+    /**
+     * 去重统计
+     */
+    @Test
+    public void testCardinality() throws IOException {
+        SearchRequest request = new SearchRequest("student");
+        CardinalityAggregationBuilder cardinality = AggregationBuilders
+                .cardinality("age_cardinality")
+                .field("age").precisionThreshold(100);
+        SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
+        sourceBuilder.aggregation(cardinality);
+        sourceBuilder.size(0);
+        request.source(sourceBuilder);
+
+        SearchResponse response = restHighLevelClient.search(request, RequestOptions.DEFAULT);
+        Cardinality ageCardinality = response.getAggregations().get("age_cardinality");
+        System.out.println(ageCardinality.getValue());
+    }
+
+    @Test
+    public void percentTest() throws IOException {
+        SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
+        PercentilesAggregationBuilder percentiles = AggregationBuilders.percentiles("age_percent")
+                .field("age").percentiles(new double[]{25, 50, 75, 99});
+        sourceBuilder.size(0);
+        sourceBuilder.aggregation(percentiles);
+        SearchRequest searchRequest = new SearchRequest("student");
+        searchRequest.source(sourceBuilder);
+        SearchResponse response = restHighLevelClient.search(searchRequest, RequestOptions.DEFAULT);
+        Percentiles agePercent = response.getAggregations().get("age_percent");
+        for (Percentile entry : agePercent) {
+            System.out.println(entry.getPercent() + "  " + entry.getValue());
+        }
+    }
+
+    @Test
+    public void percentileRankAggs() throws IOException {
+        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
+        PercentileRanksAggregationBuilder aggregationBuilder = AggregationBuilders.percentileRanks("age_percent", new double[]{25, 30}).field("age");
+        searchSourceBuilder.size(0);
+        searchSourceBuilder.aggregation(aggregationBuilder);
+        SearchRequest searchRequest = new SearchRequest("student");
+        searchRequest.source(searchSourceBuilder);
+        SearchResponse response = restHighLevelClient.search(searchRequest, RequestOptions.DEFAULT);
+        PercentileRanks percentileRanks = response.getAggregations().get("age_percent");
+        for (Percentile entry : percentileRanks) {
+            System.out.println(entry.getPercent() + "  " + entry.getValue());
+        }
+    }
+
+    @Test
+    public void filterAggs() throws IOException {
+        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
+        FiltersAggregationBuilder filters = AggregationBuilders.filters("log_filters",
+                new FiltersAggregator.KeyedFilter("errors", QueryBuilders.matchQuery("body", "error")),
+                new FiltersAggregator.KeyedFilter("warnings", QueryBuilders.matchQuery("body", "warning")));
+        searchSourceBuilder.aggregation(filters);
+        SearchRequest searchRequest = new SearchRequest("logs");
+        searchRequest.source(searchSourceBuilder);
+        SearchResponse response = restHighLevelClient.search(searchRequest, RequestOptions.DEFAULT);
+        Filters agg = response.getAggregations().get("log_filters");
+        for (Filters.Bucket entry : agg.getBuckets()) {
+            System.out.println(entry.getKeyAsString() + " " + entry.getDocCount());
+        }
+    }
+
+
 }
