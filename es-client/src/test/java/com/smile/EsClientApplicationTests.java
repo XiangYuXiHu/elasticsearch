@@ -6,7 +6,9 @@ import com.smile.service.ElasticsearchService;
 import lombok.extern.slf4j.Slf4j;
 import org.elasticsearch.action.bulk.BulkResponse;
 import org.elasticsearch.action.search.*;
+import org.elasticsearch.client.Request;
 import org.elasticsearch.client.RequestOptions;
+import org.elasticsearch.client.Response;
 import org.elasticsearch.client.RestHighLevelClient;
 import org.elasticsearch.common.text.Text;
 import org.elasticsearch.common.unit.Fuzziness;
@@ -16,13 +18,18 @@ import org.elasticsearch.index.query.MatchQueryBuilder;
 import org.elasticsearch.index.query.QueryBuilder;
 import org.elasticsearch.index.query.QueryBuilders;
 import org.elasticsearch.index.reindex.BulkByScrollResponse;
+import org.elasticsearch.script.ScriptType;
+import org.elasticsearch.script.mustache.SearchTemplateRequest;
+import org.elasticsearch.script.mustache.SearchTemplateResponse;
 import org.elasticsearch.search.SearchHit;
 import org.elasticsearch.search.SearchHits;
+import org.elasticsearch.search.aggregations.Aggregation;
 import org.elasticsearch.search.aggregations.AggregationBuilders;
 import org.elasticsearch.search.aggregations.Aggregations;
 import org.elasticsearch.search.aggregations.bucket.filter.Filters;
 import org.elasticsearch.search.aggregations.bucket.filter.FiltersAggregationBuilder;
 import org.elasticsearch.search.aggregations.bucket.filter.FiltersAggregator;
+import org.elasticsearch.search.aggregations.bucket.histogram.*;
 import org.elasticsearch.search.aggregations.bucket.range.Range;
 import org.elasticsearch.search.aggregations.bucket.terms.Terms;
 import org.elasticsearch.search.aggregations.bucket.terms.TermsAggregationBuilder;
@@ -490,6 +497,98 @@ public class EsClientApplicationTests {
         Filters agg = response.getAggregations().get("log_filters");
         for (Filters.Bucket entry : agg.getBuckets()) {
             System.out.println(entry.getKeyAsString() + " " + entry.getDocCount());
+        }
+    }
+
+    @Test
+    public void histogramAggsTest() throws IOException {
+        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
+        HistogramAggregationBuilder histogramAgg = AggregationBuilders.histogram("salary_hist").field("salary").interval(5000);
+        histogramAgg.subAggregation(AggregationBuilders.max("age_max").field("age"));
+        searchSourceBuilder.aggregation(histogramAgg);
+        SearchRequest request = new SearchRequest("student");
+        request.source(searchSourceBuilder);
+        SearchResponse searchResponse = restHighLevelClient.search(request, RequestOptions.DEFAULT);
+        ParsedHistogram salaryHist = searchResponse.getAggregations().get("salary_hist");
+        for (Histogram.Bucket entry : salaryHist.getBuckets()) {
+            System.out.println(entry.getKeyAsString() + " " + entry.getDocCount());
+            ParsedMax max = entry.getAggregations().get("age_max");
+            System.out.println(max.getValue());
+        }
+    }
+
+    @Test
+    public void dateHistogramAggs() throws IOException {
+        SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
+        DateHistogramAggregationBuilder aggregation = AggregationBuilders.dateHistogram("month_avg_salary").field("postDay").calendarInterval(DateHistogramInterval.MONTH);
+        sourceBuilder.size(0);
+        aggregation.subAggregation(AggregationBuilders.avg("avg_salary").field("salary"));
+        sourceBuilder.aggregation(aggregation);
+        SearchRequest searchRequest = new SearchRequest("student");
+        searchRequest.source(sourceBuilder);
+        SearchResponse response = restHighLevelClient.search(searchRequest, RequestOptions.DEFAULT);
+        ParsedDateHistogram monthAvgSalary = response.getAggregations().get("month_avg_salary");
+        for (Histogram.Bucket entry : monthAvgSalary.getBuckets()) {
+            ParsedAvg avg = entry.getAggregations().get("avg_salary");
+            System.out.println(entry.getKeyAsString() + "  " + avg.getValueAsString());
+        }
+    }
+
+    @Test
+    public void searchTemplate() throws IOException {
+        String templateSource = "{\n" +
+                "      \"query\":{\n" +
+                "        \"match\":{\n" +
+                "          \"order_id\":\"{{orderId}}\"\n" +
+                "        }\n" +
+                "      }\n" +
+                "}";
+        SearchTemplateRequest request = new SearchTemplateRequest();
+        request.setRequest(new SearchRequest("data_ecommerce"));
+        request.setScriptType(ScriptType.INLINE);
+        request.setScript(templateSource);
+        Map<String, Object> scriptParams = new HashMap<>();
+        scriptParams.put("orderId", 2);
+        request.setScriptParams(scriptParams);
+        SearchTemplateResponse response = restHighLevelClient.searchTemplate(request, RequestOptions.DEFAULT);
+        SearchResponse searchResponse = response.getResponse();
+        searchResponse.getHits().forEach(System.out::println);
+    }
+
+    @Test
+    public void saveTemplate() throws IOException {
+        Request request = new Request("POST", "_scripts/order_id_template");
+        String json = "{\n" +
+                "  \"script\":{\n" +
+                "    \"lang\":\"mustache\",\n" +
+                "    \"source\": {\n" +
+                "      \"query\":{\n" +
+                "        \"match\":{\n" +
+                "          \"order_id\":\"{{orderId}}\"\n" +
+                "        }\n" +
+                "      }\n" +
+                "    }\n" +
+                "  }\n" +
+                "}";
+        request.setJsonEntity(json);
+        Response response = restHighLevelClient.getLowLevelClient().performRequest(request);
+        System.out.println(response.getStatusLine().getStatusCode());
+    }
+
+    @Test
+    public void executeTemplate() throws IOException {
+        SearchTemplateRequest templateRequest = new SearchTemplateRequest();
+        templateRequest.setRequest(new SearchRequest("data_ecommerce"));
+        templateRequest.setScriptType(ScriptType.STORED);
+        templateRequest.setScript("order_id_template");
+        HashMap<String, Object> params = new HashMap<>();
+        params.put("orderId", 2);
+        templateRequest.setScriptParams(params);
+
+        SearchTemplateResponse response = restHighLevelClient.searchTemplate(templateRequest, RequestOptions.DEFAULT);
+        SearchHits hits = response.getResponse().getHits();
+        for (SearchHit hit : hits.getHits()) {
+            System.out.println(hit.getSourceAsString());
         }
     }
 
