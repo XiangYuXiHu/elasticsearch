@@ -23,7 +23,6 @@ import org.elasticsearch.script.mustache.SearchTemplateRequest;
 import org.elasticsearch.script.mustache.SearchTemplateResponse;
 import org.elasticsearch.search.SearchHit;
 import org.elasticsearch.search.SearchHits;
-import org.elasticsearch.search.aggregations.Aggregation;
 import org.elasticsearch.search.aggregations.AggregationBuilders;
 import org.elasticsearch.search.aggregations.Aggregations;
 import org.elasticsearch.search.aggregations.bucket.filter.Filters;
@@ -41,6 +40,13 @@ import org.elasticsearch.search.sort.FieldSortBuilder;
 import org.elasticsearch.search.sort.ScoreSortBuilder;
 import org.elasticsearch.search.sort.SortBuilders;
 import org.elasticsearch.search.sort.SortOrder;
+import org.elasticsearch.search.suggest.Suggest;
+import org.elasticsearch.search.suggest.SuggestBuilder;
+import org.elasticsearch.search.suggest.completion.CompletionSuggestion;
+import org.elasticsearch.search.suggest.completion.CompletionSuggestionBuilder;
+import org.elasticsearch.search.suggest.phrase.DirectCandidateGeneratorBuilder;
+import org.elasticsearch.search.suggest.phrase.PhraseSuggestion;
+import org.elasticsearch.search.suggest.phrase.PhraseSuggestionBuilder;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -384,9 +390,12 @@ public class EsClientApplicationTests {
 
     @Test
     public void testScrollQuery() throws IOException {
-        MatchQueryBuilder queryBuilder = QueryBuilders.matchQuery("job", "Programmer").fuzziness(Fuzziness.AUTO)
-                .prefixLength(1).maxExpansions(1);
-        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder().query(queryBuilder).size(2)
+        MatchQueryBuilder queryBuilder = QueryBuilders.matchQuery("job", "Programmer")
+                .fuzziness(Fuzziness.AUTO)
+                .prefixLength(1)
+                .maxExpansions(1);
+        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder()
+                .query(queryBuilder).size(2)
                 .sort(new ScoreSortBuilder().order(SortOrder.DESC));
 
         SearchRequest searchRequest = new SearchRequest("employees");
@@ -589,6 +598,58 @@ public class EsClientApplicationTests {
         SearchHits hits = response.getResponse().getHits();
         for (SearchHit hit : hits.getHits()) {
             System.out.println(hit.getSourceAsString());
+        }
+    }
+
+    @Test
+    public void completionSuggestion() throws IOException {
+        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
+        SuggestBuilder suggestBuilder = new SuggestBuilder();
+        CompletionSuggestionBuilder completionSuggestionBuilder = new CompletionSuggestionBuilder("title_completion");
+        completionSuggestionBuilder.prefix("Elasticsearch ");
+        completionSuggestionBuilder.skipDuplicates(Boolean.TRUE);
+        completionSuggestionBuilder.size(10);
+        suggestBuilder.addSuggestion("article-suggester", completionSuggestionBuilder);
+        searchSourceBuilder.suggest(suggestBuilder);
+        SearchRequest searchRequest = new SearchRequest("articles");
+        searchRequest.source(searchSourceBuilder);
+        SearchResponse response = restHighLevelClient.search(searchRequest, RequestOptions.DEFAULT);
+        Suggest suggest = response.getSuggest();
+        if (null == suggest) {
+            System.out.println("suggest is null");
+        }
+        CompletionSuggestion completionSuggestion = suggest.getSuggestion("article-suggester");
+        for (CompletionSuggestion.Entry entry : completionSuggestion.getEntries()) {
+            for (CompletionSuggestion.Entry.Option option : entry) {
+                System.out.println(option.getText().toString());
+            }
+        }
+    }
+
+    @Test
+    public void phraseSuggest() throws IOException {
+        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
+        SuggestBuilder suggestBuilder = new SuggestBuilder();
+        PhraseSuggestionBuilder phraseSuggestionBuilder = new PhraseSuggestionBuilder("passage");
+        phraseSuggestionBuilder.text("lucne and elasticsearh rock hello world ")
+                .confidence(0)
+                .maxErrors(2)
+                .addCandidateGenerator(new DirectCandidateGeneratorBuilder("passage").suggestMode("always"));
+        suggestBuilder.addSuggestion("phrase_suggest", phraseSuggestionBuilder);
+        searchSourceBuilder.suggest(suggestBuilder);
+        SearchRequest searchRequest = new SearchRequest("book");
+        searchRequest.source(searchSourceBuilder);
+        SearchResponse response = restHighLevelClient.search(searchRequest, RequestOptions.DEFAULT);
+        Suggest suggest = response.getSuggest();
+        if (suggest == null) {
+            System.out.println("suggest is null");
+        }
+        PhraseSuggestion phraseSuggestion = suggest.getSuggestion("phrase_suggest");
+        for (PhraseSuggestion.Entry entry : phraseSuggestion.getEntries()) {
+            for (PhraseSuggestion.Entry.Option option : entry) {
+                String suggestText = option.getText().string();
+                System.out.println(suggestText);
+            }
         }
     }
 
